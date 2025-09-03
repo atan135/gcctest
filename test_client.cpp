@@ -7,6 +7,8 @@
 #include <thread>
 #include <chrono>
 
+using namespace std;
+
 class TestClient {
 public:
     TestClient(const std::string& host, int port) : host_(host), port_(port), socket_fd_(-1) {}
