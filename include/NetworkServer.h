@@ -23,6 +23,15 @@ public:
     void stop();
     void run();
     
+    // Message handling
+    void setMessageHandler(std::function<void(const std::string&, ConnectionHandler*)> handler);
+    void broadcastMessage(const std::string& message);
+    void sendToClient(int client_fd, const std::string& message);
+    
+    // Connection management
+    size_t getConnectionCount() const;
+    void cleanupInactiveConnections(int timeout_seconds = 300);
+    
 private:
     int port_;
     int max_connections_;
@@ -31,6 +40,7 @@ private:
     std::atomic<bool> running_;
     std::unique_ptr<ThreadPool> thread_pool_;
     std::unordered_map<int, std::unique_ptr<ConnectionHandler>> connections_;
+    std::function<void(const std::string&, ConnectionHandler*)> message_handler_;
     
     bool setupServer();
     bool setupEpoll();

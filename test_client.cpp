@@ -40,26 +40,22 @@ public:
         return true;
     }
     
-    void sendRequest(const std::string& message) {
+    void sendMessage(const std::string& message) {
         if (socket_fd_ == -1) return;
         
-        std::string request = "GET / HTTP/1.1\r\n"
-                            "Host: " + host_ + "\r\n"
-                            "User-Agent: TestClient/1.0\r\n"
-                            "Connection: close\r\n"
-                            "\r\n"
-                            + message;
+        // Add newline delimiter for TCP message framing
+        std::string tcp_message = message + "\n";
         
-        ssize_t bytes_sent = send(socket_fd_, request.c_str(), request.length(), 0);
+        ssize_t bytes_sent = send(socket_fd_, tcp_message.c_str(), tcp_message.length(), 0);
         if (bytes_sent < 0) {
-            std::cerr << "Failed to send request" << std::endl;
+            std::cerr << "Failed to send message" << std::endl;
             return;
         }
         
         std::cout << "Sent: " << message << std::endl;
     }
     
-    std::string receiveResponse() {
+    std::string receiveMessage() {
         if (socket_fd_ == -1) return "";
         
         char buffer[4096];
@@ -70,7 +66,14 @@ public:
         }
         
         buffer[bytes_received] = '\0';
-        return std::string(buffer);
+        std::string message(buffer);
+        
+        // Remove newline delimiter if present
+        if (!message.empty() && message.back() == '\n') {
+            message.pop_back();
+        }
+        
+        return message;
     }
     
     void disconnect() {
@@ -95,9 +98,15 @@ void testSingleConnection() {
         return;
     }
     
-    client.sendRequest("Hello from single client!");
-    std::string response = client.receiveResponse();
-    std::cout << "Response:\n" << response << std::endl;
+    // Send multiple messages to test persistent connection
+    for (int i = 0; i < 3; ++i) {
+        std::string message = "Hello message " + std::to_string(i + 1);
+        client.sendMessage(message);
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::string response = client.receiveMessage();
+        std::cout << "Response: " << response << std::endl;
+    }
     
     client.disconnect();
 }
@@ -113,12 +122,16 @@ void testMultipleConnections() {
             TestClient client("127.0.0.1", 8080);
             if (client.connect()) {
                 std::string message = "Hello from client " + std::to_string(i);
-                client.sendRequest(message);
-                std::string response = client.receiveResponse();
-                std::cout << "Client " << i << " received response" << std::endl;
+                client.sendMessage(message);
+                std::string response = client.receiveMessage();
+                std::cout << "Client " << i << " received: " << response << std::endl;
                 
-                // Keep connection alive for a bit
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                // Keep connection alive and send more messages
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                client.sendMessage("Second message from client " + std::to_string(i));
+                response = client.receiveMessage();
+                std::cout << "Client " << i << " received: " << response << std::endl;
+                
                 client.disconnect();
             }
         });
@@ -144,8 +157,9 @@ void testConcurrentConnections() {
             if (client.connect()) {
                 for (int j = 0; j < 3; ++j) {
                     std::string message = "Request " + std::to_string(j) + " from client " + std::to_string(i);
-                    client.sendRequest(message);
-                    std::string response = client.receiveResponse();
+                    client.sendMessage(message);
+                    std::string response = client.receiveMessage();
+                    std::cout << "Client " << i << " got: " << response << std::endl;
                     std::this_thread::sleep_for(std::chrono::milliseconds(50));
                 }
                 client.disconnect();
@@ -162,8 +176,9 @@ void testConcurrentConnections() {
 }
 
 int main() {
-    std::cout << "Network Server Test Client" << std::endl;
-    std::cout << "Make sure the server is running on port 8080" << std::endl;
+    std::cout << "TCP Server Test Client" << std::endl;
+    std::cout << "Make sure the TCP server is running on port 8080" << std::endl;
+    std::cout << "This client will test persistent TCP connections with message framing" << std::endl;
     std::cout << "Press Enter to start tests..." << std::endl;
     std::cin.get();
     
@@ -175,6 +190,6 @@ int main() {
     
     testConcurrentConnections();
     
-    std::cout << "\nAll tests completed!" << std::endl;
+    std::cout << "\nAll TCP tests completed!" << std::endl;
     return 0;
 }

@@ -195,10 +195,17 @@ void NetworkServer::handleNewConnection() {
         // Create connection handler
         auto handler = std::make_unique<ConnectionHandler>(client_fd, client_ip, client_port);
         
-        // Add to epoll
+        // Set up message handler
+        handler->onMessageReceived = [this](const std::string& message, ConnectionHandler* handler) {
+            if (message_handler_) {
+                message_handler_(message, handler);
+            }
+        };
+        
+        // Add to epoll with both read and write events
         struct epoll_event event;
         event.data.fd = client_fd;
-        event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+        event.events = EPOLLIN | EPOLLOUT | EPOLLET | EPOLLRDHUP;
         
         if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, client_fd, &event) == -1) {
             std::cerr << "Failed to add client to epoll: " << strerror(errno) << std::endl;
@@ -223,13 +230,20 @@ void NetworkServer::handleClientEvent(int client_fd, uint32_t events) {
         return;
     }
     
+    auto& handler = it->second;
+    
     if (events & EPOLLIN) {
         // Data available to read
-        auto& handler = it->second;
-        
-        // Submit to thread pool
         thread_pool_->enqueue([&handler]() {
-            handler->handle();
+            handler->handleRead();
+            handler->processMessages();
+        });
+    }
+    
+    if (events & EPOLLOUT) {
+        // Socket ready for writing
+        thread_pool_->enqueue([&handler]() {
+            handler->handleWrite();
         });
     }
 }
@@ -255,5 +269,47 @@ void NetworkServer::signalHandler(int signal) {
 void NetworkServer::staticSignalHandler(int signal) {
     if (instance_) {
         instance_->signalHandler(signal);
+    }
+}
+
+void NetworkServer::setMessageHandler(std::function<void(const std::string&, ConnectionHandler*)> handler) {
+    message_handler_ = handler;
+}
+
+void NetworkServer::broadcastMessage(const std::string& message) {
+    for (auto& pair : connections_) {
+        if (pair.second->isConnected()) {
+            pair.second->sendMessage(message);
+        }
+    }
+}
+
+void NetworkServer::sendToClient(int client_fd, const std::string& message) {
+    auto it = connections_.find(client_fd);
+    if (it != connections_.end() && it->second->isConnected()) {
+        it->second->sendMessage(message);
+    }
+}
+
+size_t NetworkServer::getConnectionCount() const {
+    return connections_.size();
+}
+
+void NetworkServer::cleanupInactiveConnections(int timeout_seconds) {
+    auto now = std::chrono::steady_clock::now();
+    auto timeout = std::chrono::seconds(timeout_seconds);
+    
+    std::vector<int> to_remove;
+    
+    for (auto& pair : connections_) {
+        auto last_activity = pair.second->getLastActivity();
+        if (now - last_activity > timeout) {
+            to_remove.push_back(pair.first);
+        }
+    }
+    
+    for (int fd : to_remove) {
+        std::cout << "Cleaning up inactive connection: " << fd << std::endl;
+        cleanupConnection(fd);
     }
 }

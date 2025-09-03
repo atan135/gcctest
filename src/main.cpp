@@ -47,10 +47,26 @@ int main(int argc, char* argv[]) {
     try {
         NetworkServer server(port, max_connections, thread_count);
         
+        // Set up custom message handler
+        server.setMessageHandler([](const std::string& message, ConnectionHandler* handler) {
+            std::cout << "Received from " << handler->getClientInfo() 
+                      << ": " << message << std::endl;
+            
+            // Example: Echo the message back
+            std::string response = "Server received: " + message;
+            handler->sendMessage(response);
+            
+            // Example: Broadcast to all clients (optional)
+            // server.broadcastMessage("Broadcast: " + message);
+        });
+        
         if (!server.start()) {
             std::cerr << "Failed to start server" << std::endl;
             return 1;
         }
+        
+        std::cout << "TCP Server is running. Clients can send messages ending with '\\n'" << std::endl;
+        std::cout << "Use TestClient to connect and send messages" << std::endl;
         
         // Run the server
         server.run();

@@ -1,15 +1,18 @@
-# Network Server with epoll and Multithreading
+# TCP Server with epoll and Multithreading
 
-A high-performance C++ network server that uses epoll for I/O multiplexing and a thread pool for handling multiple concurrent connections.
+A high-performance C++ TCP server that uses epoll for I/O multiplexing and a thread pool for handling multiple persistent connections.
 
 ## Features
 
 - **epoll-based I/O multiplexing**: Efficient handling of thousands of concurrent connections
-- **Thread pool**: Multi-threaded request processing
+- **Thread pool**: Multi-threaded message processing
 - **Non-blocking I/O**: Edge-triggered epoll for optimal performance
-- **HTTP-like responses**: Simple request/response handling
+- **Persistent TCP connections**: Long-lived connections with message framing
+- **Message-based protocol**: Simple newline-delimited message format
 - **Signal handling**: Graceful shutdown on SIGINT/SIGTERM
 - **Connection management**: Automatic cleanup of disconnected clients
+- **Broadcast messaging**: Send messages to all connected clients
+- **Activity tracking**: Monitor connection activity and cleanup inactive connections
 
 ## Project Structure
 
@@ -88,15 +91,16 @@ g++ -std=c++17 -O2 -Wall -Wextra \
 
 You can test the server using various methods:
 
-#### Using curl
+#### Using the included TestClient
 ```bash
-curl http://localhost:8080
+./TestClient
 ```
 
 #### Using telnet
 ```bash
 telnet localhost 8080
 # Type any message and press Enter
+# Messages should end with newline character
 ```
 
 #### Using netcat
@@ -104,9 +108,11 @@ telnet localhost 8080
 echo "Hello Server" | nc localhost 8080
 ```
 
-#### Load testing with Apache Bench
-```bash
-ab -n 1000 -c 100 http://localhost:8080/
+#### Custom TCP client
+Connect to the server and send newline-delimited messages:
+```
+Client: "Hello World\n"
+Server: "Server received: Hello World\n"
 ```
 
 ## Architecture
@@ -124,7 +130,9 @@ ab -n 1000 -c 100 http://localhost:8080/
 ### Connection Handling
 - Each connection is managed by a `ConnectionHandler`
 - Automatic cleanup on disconnection
-- HTTP-like response format
+- Message-based protocol with newline delimiters
+- Persistent connections with activity tracking
+- Thread-safe message queuing for sending
 
 ## Performance Considerations
 
@@ -158,7 +166,10 @@ Press Ctrl+C to stop the server
 Server started on port 8080
 Max connections: 1000
 Thread pool size: 4
+TCP Server is running. Clients can send messages ending with '\n'
+Use TestClient to connect and send messages
 New connection from 127.0.0.1:54321
+Received from 127.0.0.1:54321: Hello World
 Cleaning up connection: 127.0.0.1:54321
 ```
 
