@@ -3,6 +3,7 @@
 #include <sstream>
 #include <chrono>
 #include <iomanip>
+#include <cstring>
 
 ConnectionHandler::ConnectionHandler(int client_fd, const std::string& client_ip, int client_port)
     : client_fd_(client_fd), client_ip_(client_ip), client_port_(client_port), 
