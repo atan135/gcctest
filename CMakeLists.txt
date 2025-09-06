@@ -38,9 +38,18 @@ target_link_libraries(${PROJECT_NAME}
     pthread
 )
 
-# Create test client executable
-add_executable(TestClient test_client.cpp)
+# Create test client executable (Linux/Unix)
+add_executable(TestClient test/test_client.cpp)
 target_link_libraries(TestClient pthread)
 
+# Create Windows test client executable (if on Windows)
+if(WIN32)
+    add_executable(TestClientWindows test/test_client_windows.cpp)
+    target_link_libraries(TestClientWindows ws2_32)
+    set(TEST_TARGETS TestClient TestClientWindows)
+else()
+    set(TEST_TARGETS TestClient)
+endif()
+
 # Install targets
-install(TARGETS ${PROJECT_NAME} TestClient DESTINATION bin)
+install(TARGETS ${PROJECT_NAME} ${TEST_TARGETS} DESTINATION bin)

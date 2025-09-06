@@ -48,16 +48,43 @@ gcctest/
 
 ### Using CMake (Recommended)
 
+**Linux/Unix:**
 ```bash
-# Create build directory
-mkdir build
-cd build
+# Using build script (recommended)
+./build_cmake.sh
 
-# Configure and build
+# Or manually:
+mkdir build && cd build
 cmake ..
-make
+cmake --build . -j$(nproc)
+```
 
-# The executable will be created as 'NetworkServer'
+**Windows:**
+```bash
+# Using build script (recommended)
+build_cmake.bat
+
+# Or manually:
+mkdir build && cd build
+cmake .. -G "MinGW Makefiles"
+cmake --build .
+```
+
+**Executables created:**
+- `build/NetworkServer` (or `NetworkServer.exe` on Windows)
+- `build/TestClient` (Linux test client)
+- `build/TestClientWindows.exe` (Windows test client, if on Windows)
+
+### Using Make (Linux/Unix)
+
+```bash
+make all          # Build both server and test client
+make clean        # Clean build files
+make run          # Build and run server
+make test         # Build and run test client
+make test-windows # Build Windows test client (requires MinGW)
+make debug        # Build with debug symbols
+make help         # Show available targets
 ```
 
 ### Manual Compilation
