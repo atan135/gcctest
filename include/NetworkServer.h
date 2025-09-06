@@ -6,7 +6,6 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <signal.h>
 #include <memory>
 #include <thread>
 #include <atomic>
@@ -48,8 +47,4 @@ private:
     void handleNewConnection();
     void handleClientEvent(int client_fd, uint32_t events);
     void cleanupConnection(int client_fd);
-    void signalHandler(int signal);
-    
-    static NetworkServer* instance_;
-    static void staticSignalHandler(int signal);
 };

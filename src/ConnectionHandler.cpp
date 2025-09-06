@@ -4,6 +4,7 @@
 #include <chrono>
 #include <iomanip>
 #include <cstring>
+#include <cerrno>
 
 ConnectionHandler::ConnectionHandler(int client_fd, const std::string& client_ip, int client_port)
     : client_fd_(client_fd), client_ip_(client_ip), client_port_(client_port), 
@@ -18,25 +19,46 @@ void ConnectionHandler::handleRead() {
     if (!connected_) return;
     
     try {
-        char buffer[4096];
-        ssize_t bytes_received = recv(client_fd_, buffer, sizeof(buffer), 0);
+        bool data_received = false;
         
-        if (bytes_received <= 0) {
-            if (bytes_received == 0) {
-                std::cout << "Client " << getClientInfo() << " disconnected gracefully" << std::endl;
-            } else {
-                std::cerr << "Error receiving data from " << getClientInfo() << ": " << strerror(errno) << std::endl;
+        // Keep reading until no more data available (EAGAIN)
+        // This is crucial for edge-triggered epoll
+        while (true) {
+            char buffer[4096];
+            ssize_t bytes_received = recv(client_fd_, buffer, sizeof(buffer), 0);
+            
+            if (bytes_received <= 0) {
+                if (bytes_received == 0) {
+                    // Client disconnected gracefully
+                    std::cout << "Client " << getClientInfo() << " disconnected gracefully" << std::endl;
+                    handleDisconnection();
+                    return;
+                } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    // No more data available - this is normal for non-blocking sockets
+                    break;
+                } else {
+                    // Real error occurred
+                    std::cerr << "Error receiving data from " << getClientInfo() << ": " << strerror(errno) << std::endl;
+                    handleDisconnection();
+                    return;
+                }
             }
-            handleDisconnection();
-            return;
+            
+            // Append received data to read buffer
+            read_buffer_.append(buffer, bytes_received);
+            data_received = true;
+            
+            // If we received less than buffer size, likely no more data
+            if (bytes_received < static_cast<ssize_t>(sizeof(buffer))) {
+                break;
+            }
         }
         
-        // Append received data to read buffer
-        read_buffer_.append(buffer, bytes_received);
-        updateActivity();
-        
-        // Process incoming data
-        processIncomingData();
+        // Only update activity and process if we actually received data
+        if (data_received) {
+            updateActivity();
+            processIncomingData();
+        }
         
     } catch (const std::exception& e) {
         std::cerr << "Error handling read from " << getClientInfo() 

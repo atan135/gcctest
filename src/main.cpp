@@ -1,51 +1,147 @@
 #include "NetworkServer.h"
 #include <iostream>
 #include <string>
+#include <fstream>
+#include <sstream>
+#include <map>
+#include <csignal>
+#include <atomic>
 
-int main(int argc, char* argv[]) {
-    // Default values
+// Global variables for signal handling
+std::atomic<bool> g_shutdown_requested(false);
+NetworkServer* g_server_instance = nullptr;
+
+// Signal handler function
+void signalHandler(int signal) {
+    const char* signal_name = "UNKNOWN";
+    
+    switch (signal) {
+        case SIGINT:
+            signal_name = "SIGINT (Ctrl+C)";
+            break;
+        case SIGTERM:
+            signal_name = "SIGTERM";
+            break;
+#ifdef SIGQUIT
+        case SIGQUIT:
+            signal_name = "SIGQUIT";
+            break;
+#endif
+#ifdef SIGHUP
+        case SIGHUP:
+            signal_name = "SIGHUP";
+            break;
+#endif
+        default:
+            break;
+    }
+    
+    std::cout << "\nReceived signal " << signal << " (" << signal_name << ")" << std::endl;
+    std::cout << "Initiating graceful shutdown..." << std::endl;
+    
+    g_shutdown_requested.store(true);
+    
+    // If we have a server instance, stop it
+    if (g_server_instance) {
+        g_server_instance->stop();
+    }
+}
+
+// Function to register signal handlers
+void setupSignalHandlers() {
+    std::signal(SIGINT, signalHandler);   // Ctrl+C
+    std::signal(SIGTERM, signalHandler);  // Termination request
+    
+#ifdef SIGQUIT
+    std::signal(SIGQUIT, signalHandler);  // Quit signal (Ctrl+\)
+#endif
+
+#ifdef SIGHUP
+    std::signal(SIGHUP, signalHandler);   // Hangup signal
+#endif
+
+    std::cout << "Signal handlers registered for graceful shutdown" << std::endl;
+}
+
+// Structure to hold configuration settings
+struct ServerConfig {
     int port = 8080;
     int max_connections = 1000;
     int thread_count = 4;
+};
+
+// Function to read configuration from file
+ServerConfig readConfig(const std::string& filename) {
+    ServerConfig config;
+    std::ifstream file(filename);
     
-    // Parse command line arguments
-    if (argc > 1) {
+    if (!file.is_open()) {
+        std::cout << "Config file '" << filename << "' not found. Using default values." << std::endl;
+        return config;
+    }
+    
+    std::string line;
+    while (std::getline(file, line)) {
+        // Skip empty lines and comments
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        
+        // Find the '=' separator
+        size_t pos = line.find('=');
+        if (pos == std::string::npos) {
+            continue; // Skip invalid lines
+        }
+        
+        std::string key = line.substr(0, pos);
+        std::string value = line.substr(pos + 1);
+        
+        // Parse the configuration values
         try {
-            port = std::stoi(argv[1]);
+            if (key == "port") {
+                config.port = std::stoi(value);
+            } else if (key == "max_connections") {
+                config.max_connections = std::stoi(value);
+            } else if (key == "thread_count") {
+                config.thread_count = std::stoi(value);
+            }
         } catch (const std::exception& e) {
-            std::cerr << "Invalid port number: " << argv[1] << std::endl;
-            return 1;
+            std::cerr << "Warning: Invalid value for '" << key << "': " << value << std::endl;
         }
     }
     
-    if (argc > 2) {
-        try {
-            max_connections = std::stoi(argv[2]);
-        } catch (const std::exception& e) {
-            std::cerr << "Invalid max connections: " << argv[2] << std::endl;
-            return 1;
-        }
-    }
+    file.close();
+    std::cout << "Configuration loaded from '" << filename << "'" << std::endl;
+    return config;
+}
+
+int main() {
+    // Setup signal handlers first
+    setupSignalHandlers();
     
-    if (argc > 3) {
-        try {
-            thread_count = std::stoi(argv[3]);
-        } catch (const std::exception& e) {
-            std::cerr << "Invalid thread count: " << argv[3] << std::endl;
-            return 1;
-        }
-    }
+    // Load configuration from file
+    ServerConfig config = readConfig("settings.config");
     
+    // Use config values
+    int port = config.port;
+    int max_connections = config.max_connections;
+    int thread_count = config.thread_count;
+    
+
     std::cout << "Starting Network Server..." << std::endl;
     std::cout << "Port: " << port << std::endl;
     std::cout << "Max connections: " << max_connections << std::endl;
     std::cout << "Thread count: " << thread_count << std::endl;
-    std::cout << "Usage: " << argv[0] << " [port] [max_connections] [thread_count]" << std::endl;
+    std::cout << "Configuration loaded from settings.config" << std::endl;
+    std::cout << "Edit settings.config to modify server parameters" << std::endl;
     std::cout << "Press Ctrl+C to stop the server" << std::endl;
     std::cout << "----------------------------------------" << std::endl;
     
     try {
         NetworkServer server(port, max_connections, thread_count);
+        
+        // Set global server instance for signal handler
+        g_server_instance = &server;
         
         // Set up custom message handler
         server.setMessageHandler([](const std::string& message, ConnectionHandler* handler) {
@@ -71,11 +167,19 @@ int main(int argc, char* argv[]) {
         // Run the server
         server.run();
         
+        // Clear global server instance
+        g_server_instance = nullptr;
+        
     } catch (const std::exception& e) {
         std::cerr << "Server error: " << e.what() << std::endl;
+        g_server_instance = nullptr;
         return 1;
     }
     
-    std::cout << "Server shutdown complete" << std::endl;
+    if (g_shutdown_requested.load()) {
+        std::cout << "Server shutdown completed gracefully" << std::endl;
+    } else {
+        std::cout << "Server shutdown complete" << std::endl;
+    }
     return 0;
 }

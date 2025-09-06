@@ -1,10 +1,9 @@
 #include "NetworkServer.h"
 #include <iostream>
 #include <cstring>
-#include <csignal>
+#include <chrono>
 #include <sys/epoll.h>
 
-NetworkServer* NetworkServer::instance_ = nullptr;
 
 NetworkServer::NetworkServer(int port, int max_connections, int thread_count)
     : port_(port), max_connections_(max_connections), server_fd_(-1), 
@@ -13,10 +12,6 @@ NetworkServer::NetworkServer(int port, int max_connections, int thread_count)
     // Initialize thread pool
     thread_pool_ = std::make_unique<ThreadPool>(thread_count);
     
-    // Set up signal handling
-    instance_ = this;
-    signal(SIGINT, staticSignalHandler);
-    signal(SIGTERM, staticSignalHandler);
 }
 
 NetworkServer::~NetworkServer() {
@@ -72,6 +67,10 @@ void NetworkServer::run() {
     const int MAX_EVENTS = 100;
     struct epoll_event events[MAX_EVENTS];
     
+    // For periodic cleanup of inactive connections
+    auto last_cleanup = std::chrono::steady_clock::now();
+    const auto cleanup_interval = std::chrono::minutes(5); // Cleanup every 5 minutes
+    
     while (running_) {
         int num_events = epoll_wait(epoll_fd_, events, MAX_EVENTS, 1000); // 1 second timeout
         
@@ -94,6 +93,15 @@ void NetworkServer::run() {
                 // Client event
                 handleClientEvent(fd, event_mask);
             }
+        }
+        
+        // Periodic cleanup of inactive connections
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_cleanup >= cleanup_interval) {
+            cleanupInactiveConnections(300); // 5 minutes timeout
+            last_cleanup = now;
+            std::cout << "Performed periodic cleanup. Active connections: " 
+                      << getConnectionCount() << std::endl;
         }
     }
 }
@@ -261,16 +269,6 @@ void NetworkServer::cleanupConnection(int client_fd) {
     close(client_fd);
 }
 
-void NetworkServer::signalHandler(int signal) {
-    std::cout << "\nReceived signal " << signal << ", shutting down..." << std::endl;
-    running_ = false;
-}
-
-void NetworkServer::staticSignalHandler(int signal) {
-    if (instance_) {
-        instance_->signalHandler(signal);
-    }
-}
 
 void NetworkServer::setMessageHandler(std::function<void(const std::string&, ConnectionHandler*)> handler) {
     message_handler_ = handler;

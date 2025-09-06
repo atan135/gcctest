@@ -56,7 +56,7 @@ inline ThreadPool::ThreadPool(size_t threads)
         );
 }
 
-// add new work item to the pool
+// 请求加入到线程池，等待线程池中的线程执行
 template<class F, class... Args>
 auto ThreadPool::enqueue(F&& f, Args&&... args) 
     -> std::future<typename std::result_of<F(Args...)>::type>
@@ -71,7 +71,7 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
     {
         std::unique_lock<std::mutex> lock(queue_mutex);
 
-        // don't allow enqueueing after stopping the pool
+        // 不允许在停止线程池后加入任务
         if(stop)
             throw std::runtime_error("enqueue on stopped ThreadPool");
 
