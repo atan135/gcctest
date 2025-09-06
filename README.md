@@ -26,8 +26,15 @@ gcctest/
 │   ├── main.cpp             # Application entry point
 │   ├── NetworkServer.cpp    # Server implementation
 │   └── ConnectionHandler.cpp # Connection handling logic
-├── CMakeLists.txt           # Build configuration
-└── README.md               # This file
+├── test/
+│   ├── test_client.cpp      # Linux test client
+│   ├── test_client_windows.cpp # Windows test client
+│   ├── build_windows.bat   # Windows build script
+│   └── README.md           # Test client documentation
+├── settings.config         # Server configuration
+├── Makefile               # Build configuration
+├── build_test_client.bat  # Windows test client builder
+└── README.md              # This file
 ```
 
 ## Requirements
@@ -91,9 +98,24 @@ g++ -std=c++17 -O2 -Wall -Wextra \
 
 You can test the server using various methods:
 
-#### Using the included TestClient
+#### Using the included Test Client
+
+**Linux/Unix:**
 ```bash
-./TestClient
+make test          # Build and run Linux test client
+```
+
+**Windows:**
+```bash
+# Option 1: From project root
+build_test_client.bat
+
+# Option 2: From test directory  
+cd test
+build_windows.bat
+
+# Then run
+test\TestClient.exe
 ```
 
 #### Using telnet

@@ -4,6 +4,11 @@ bin/
 lib/
 obj/
 
+# Test executables
+test/TestClient
+test/TestClient.exe
+test/TestClient_debug.exe
+
 # Compiled Object files
 *.o
 *.obj
