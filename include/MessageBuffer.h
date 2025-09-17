@@ -7,6 +7,9 @@
 #include <mutex>
 #include "BufferConfig.h"
 
+// Forward declarations
+class MessageBuffer;
+
 // Memory pool for message buffers to avoid fragmentation
 class MessageBufferPool {
 public:
