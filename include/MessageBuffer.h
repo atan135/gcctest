@@ -41,7 +41,7 @@ private:
 class MessageBuffer {
 public:
     MessageBuffer(size_t capacity);
-    ~MessageBuffer() = default;
+    ~MessageBuffer();
     
     // Non-copyable, movable
     MessageBuffer(const MessageBuffer&) = delete;
@@ -100,6 +100,6 @@ public:
 
 private:
     std::vector<std::unique_ptr<MessageBuffer>> messages_;
-    std::mutex queue_mutex_;
+    mutable std::mutex queue_mutex_;
     MessageBufferPool buffer_pool_;
 };
