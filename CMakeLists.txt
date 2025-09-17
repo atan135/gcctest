@@ -20,6 +20,8 @@ set(SOURCES
     src/main.cpp
     src/NetworkServer.cpp
     src/ConnectionHandler.cpp
+    src/MessageBuffer.cpp
+    src/BufferConfig.cpp
 )
 
 # Header files
@@ -27,6 +29,8 @@ set(HEADERS
     include/NetworkServer.h
     include/ConnectionHandler.h
     include/ThreadPool.h
+    include/MessageBuffer.h
+    include/BufferConfig.h
 )
 
 # Create executable

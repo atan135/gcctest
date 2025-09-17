@@ -9,6 +9,8 @@
 ConnectionHandler::ConnectionHandler(int client_fd, const std::string& client_ip, int client_port)
     : client_fd_(client_fd), client_ip_(client_ip), client_port_(client_port), 
       connected_(true), last_activity_(std::chrono::steady_clock::now()) {
+    // Pre-allocate temporary buffer for common operations
+    temp_buffer_ = std::make_unique<MessageBuffer>(MAX_MESSAGE_SIZE);
 }
 
 ConnectionHandler::~ConnectionHandler() {
@@ -71,11 +73,11 @@ void ConnectionHandler::handleWrite() {
     if (!connected_ || !hasMessagesToSend()) return;
     
     try {
-        std::lock_guard<std::mutex> lock(send_queue_mutex_);
-        
         while (!send_queue_.empty()) {
-            const std::string& message = send_queue_.front();
-            ssize_t bytes_sent = send(client_fd_, message.c_str(), message.length(), 0);
+            MessageBuffer* buffer = send_queue_.front();
+            if (!buffer) break;
+            
+            ssize_t bytes_sent = buffer->sendPartial(client_fd_, buffer->getOffset());
             
             if (bytes_sent < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -87,17 +89,15 @@ void ConnectionHandler::handleWrite() {
                     handleDisconnection();
                     return;
                 }
-            } else if (bytes_sent < static_cast<ssize_t>(message.length())) {
-                // Partial send, remove sent part and keep the rest
-                std::string remaining = message.substr(bytes_sent);
-                send_queue_.pop();
-                send_queue_.push(remaining);
+            } else if (bytes_sent == 0) {
+                // No data sent, try again later
                 break;
-            } else {
+            } else if (buffer->isComplete()) {
                 // Complete message sent
                 send_queue_.pop();
                 updateActivity();
             }
+            // Partial send - buffer will be retried next time
         }
         
     } catch (const std::exception& e) {
@@ -117,21 +117,33 @@ void ConnectionHandler::processMessages() {
 void ConnectionHandler::sendMessage(const std::string& message) {
     if (!connected_) return;
     
-    std::string formatted_message = formatMessage(message);
+    // Use pre-allocated buffer to avoid string allocations
+    temp_buffer_->reset();
+    temp_buffer_->append(message);
+    temp_buffer_->append(MESSAGE_DELIMITER);
     
-    std::lock_guard<std::mutex> lock(send_queue_mutex_);
-    send_queue_.push(formatted_message);
+    send_queue_.enqueue(temp_buffer_->data(), temp_buffer_->size());
 }
 
 void ConnectionHandler::sendMessage(const char* data, size_t length) {
     if (!connected_) return;
     
-    std::string message(data, length);
-    sendMessage(message);
+    // Use pre-allocated buffer to avoid string allocations
+    temp_buffer_->reset();
+    temp_buffer_->append(data, length);
+    temp_buffer_->append(MESSAGE_DELIMITER);
+    
+    send_queue_.enqueue(temp_buffer_->data(), temp_buffer_->size());
+}
+
+void ConnectionHandler::sendMessage(const MessageBuffer& buffer) {
+    if (!connected_) return;
+    
+    // Direct enqueue without additional formatting
+    send_queue_.enqueue(buffer.data(), buffer.size());
 }
 
 bool ConnectionHandler::hasMessagesToSend() const {
-    std::lock_guard<std::mutex> lock(send_queue_mutex_);
     return !send_queue_.empty();
 }
 
@@ -141,6 +153,9 @@ bool ConnectionHandler::isConnected() const {
 
 void ConnectionHandler::close() {
     if (connected_) {
+        // Clear send queue to free memory
+        send_queue_.clear();
+        
         ::close(client_fd_);
         connected_ = false;
         std::cout << "Closed connection to " << getClientInfo() << std::endl;

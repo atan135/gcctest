@@ -10,6 +10,7 @@
 #include <queue>
 #include <mutex>
 #include <chrono>
+#include "MessageBuffer.h"
 
 class ConnectionHandler {
 public:
@@ -21,9 +22,10 @@ public:
     void handleWrite();
     void processMessages();
     
-    // Message handling
+    // Message handling - optimized for memory efficiency
     void sendMessage(const std::string& message);
     void sendMessage(const char* data, size_t length);
+    void sendMessage(const MessageBuffer& buffer);
     bool hasMessagesToSend() const;
     
     // Connection management
@@ -46,10 +48,12 @@ private:
     bool connected_;
     std::chrono::steady_clock::time_point last_activity_;
     
-    // Message buffers
+    // Message buffers - using memory pool to avoid fragmentation
     std::string read_buffer_;
-    std::queue<std::string> send_queue_;
-    mutable std::mutex send_queue_mutex_;
+    MessageQueue send_queue_;
+    
+    // Pre-allocated buffer for common operations
+    std::unique_ptr<MessageBuffer> temp_buffer_;
     
     // Message framing
     static const size_t MAX_MESSAGE_SIZE = 4096;
