@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstddef>  // For size_t
+#include <atomic>   // For std::atomic
+#include <mutex>    // For std::mutex
+
 // Configuration for memory buffer optimization
 struct BufferConfig {
     // Buffer sizes for different message types
