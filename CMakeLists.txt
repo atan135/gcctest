@@ -56,8 +56,17 @@ else()
 endif()
 
 # Create memory optimization example
-add_executable(MemoryOptimizationExample examples/memory_optimization_example.cpp)
-target_link_libraries(MemoryOptimizationExample pthread)
+add_executable(MemoryOptimizationExample 
+    examples/memory_optimization_example.cpp
+    src/NetworkServer.cpp
+    src/ConnectionHandler.cpp
+    src/MessageBuffer.cpp
+    src/BufferConfig.cpp
+)
+target_link_libraries(MemoryOptimizationExample 
+    Threads::Threads
+    pthread
+)
 
 # Install targets
 install(TARGETS ${PROJECT_NAME} ${TEST_TARGETS} MemoryOptimizationExample DESTINATION bin)
