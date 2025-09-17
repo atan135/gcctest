@@ -55,5 +55,12 @@ else()
     set(TEST_TARGETS TestClient)
 endif()
 
+# Create memory optimization example
+add_executable(MemoryOptimizationExample examples/memory_optimization_example.cpp)
+target_link_libraries(MemoryOptimizationExample pthread)
+
 # Install targets
-install(TARGETS ${PROJECT_NAME} ${TEST_TARGETS} DESTINATION bin)
+install(TARGETS ${PROJECT_NAME} ${TEST_TARGETS} MemoryOptimizationExample DESTINATION bin)
+
+# Install documentation
+install(DIRECTORY docs/ DESTINATION share/doc/${PROJECT_NAME})
