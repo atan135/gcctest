@@ -93,10 +93,10 @@ private:
     int socket_fd_;
 };
 
-void testSingleConnection() {
+void testSingleConnection(const std::string& server_ip, int port) {
     std::cout << "\n=== Testing Single Connection ===" << std::endl;
     
-    TestClient client("127.0.0.1", 8080);
+    TestClient client(server_ip, port);
     if (!client.connect()) {
         return;
     }
@@ -114,15 +114,15 @@ void testSingleConnection() {
     client.disconnect();
 }
 
-void testMultipleConnections() {
+void testMultipleConnections(const std::string& server_ip, int port) {
     std::cout << "\n=== Testing Multiple Connections ===" << std::endl;
     
     const int num_clients = 5;
     std::vector<std::thread> threads;
     
     for (int i = 0; i < num_clients; ++i) {
-        threads.emplace_back([i]() {
-            TestClient client("127.0.0.1", 8080);
+        threads.emplace_back([i, server_ip, port]() {
+            TestClient client(server_ip, port);
             if (client.connect()) {
                 std::string message = "Hello from client " + std::to_string(i);
                 client.sendMessage(message);
@@ -148,15 +148,15 @@ void testMultipleConnections() {
     std::cout << "All clients completed" << std::endl;
 }
 
-void testConcurrentConnections() {
+void testConcurrentConnections(const std::string& server_ip, int port) {
     std::cout << "\n=== Testing Concurrent Connections ===" << std::endl;
     
     const int num_clients = 10;
     std::vector<std::thread> threads;
     
     for (int i = 0; i < num_clients; ++i) {
-        threads.emplace_back([i]() {
-            TestClient client("127.0.0.1", 8080);
+        threads.emplace_back([i, server_ip, port]() {
+            TestClient client(server_ip, port);
             if (client.connect()) {
                 for (int j = 0; j < 3; ++j) {
                     std::string message = "Request " + std::to_string(j) + " from client " + std::to_string(i);
@@ -178,21 +178,91 @@ void testConcurrentConnections() {
     std::cout << "All concurrent clients completed" << std::endl;
 }
 
-int main() {
+void printUsage(const char* program_name) {
+    std::cout << "Usage: " << program_name << " <server_ip> <port> [options]" << std::endl;
+    std::cout << "  server_ip: IP address of the server (e.g., 127.0.0.1, 192.168.1.100)" << std::endl;
+    std::cout << "  port:      Port number of the server (e.g., 8080, 9000)" << std::endl;
+    std::cout << "  options:" << std::endl;
+    std::cout << "    --help, -h:    Show this help message" << std::endl;
+    std::cout << "    --quiet, -q:   Run tests without interactive prompts" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Examples:" << std::endl;
+    std::cout << "  " << program_name << " 127.0.0.1 8080" << std::endl;
+    std::cout << "  " << program_name << " 192.168.1.100 9000 --quiet" << std::endl;
+    std::cout << "  " << program_name << " localhost 8080" << std::endl;
+}
+
+int main(int argc, char* argv[]) {
+    // Parse command line arguments
+    std::string server_ip;
+    int port = 0;
+    bool quiet_mode = false;
+    
+    // Check for help
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            printUsage(argv[0]);
+            return 0;
+        }
+        if (arg == "--quiet" || arg == "-q") {
+            quiet_mode = true;
+        }
+    }
+    
+    // Parse server IP and port
+    if (argc < 3) {
+        std::cerr << "Error: Missing required arguments" << std::endl;
+        std::cerr << std::endl;
+        printUsage(argv[0]);
+        return 1;
+    }
+    
+    server_ip = argv[1];
+    
+    try {
+        port = std::stoi(argv[2]);
+        if (port <= 0 || port > 65535) {
+            throw std::invalid_argument("Port must be between 1 and 65535");
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: Invalid port number '" << argv[2] << "': " << e.what() << std::endl;
+        std::cerr << std::endl;
+        printUsage(argv[0]);
+        return 1;
+    }
+    
     std::cout << "TCP Server Test Client" << std::endl;
-    std::cout << "Make sure the TCP server is running on port 8080" << std::endl;
+    std::cout << "Connecting to " << server_ip << ":" << port << std::endl;
     std::cout << "This client will test persistent TCP connections with message framing" << std::endl;
-    std::cout << "Press Enter to start tests..." << std::endl;
-    std::cin.get();
     
-    testSingleConnection();
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    if (!quiet_mode) {
+        std::cout << "Press Enter to start tests..." << std::endl;
+        std::cin.get();
+    } else {
+        std::cout << "Running in quiet mode..." << std::endl;
+    }
     
-    testMultipleConnections();
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    try {
+        testSingleConnection(server_ip, port);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        
+        testMultipleConnections(server_ip, port);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        
+        testConcurrentConnections(server_ip, port);
+        
+        std::cout << "\nAll TCP tests completed successfully!" << std::endl;
+        
+        if (!quiet_mode) {
+            std::cout << "Press Enter to exit..." << std::endl;
+            std::cin.get();
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error during testing: " << e.what() << std::endl;
+        return 1;
+    }
     
-    testConcurrentConnections();
-    
-    std::cout << "\nAll TCP tests completed!" << std::endl;
     return 0;
 }
