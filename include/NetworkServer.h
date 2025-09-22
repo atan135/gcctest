@@ -26,6 +26,7 @@ public:
     void setMessageHandler(std::function<void(const std::string&, ConnectionHandler*)> handler);
     void broadcastMessage(const std::string& message);
     void sendToClient(int client_fd, const std::string& message);
+    void forceWriteEvent(int client_fd);
     
     // Connection management
     size_t getConnectionCount() const;

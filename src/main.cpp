@@ -160,13 +160,16 @@ int main() {
         g_server_instance = &server;
         
         // Set up custom message handler
-        server.setMessageHandler([](const std::string& message, ConnectionHandler* handler) {
+        server.setMessageHandler([&server](const std::string& message, ConnectionHandler* handler) {
             std::cout << "Received from " << handler->getClientInfo() 
                       << ": " << message << std::endl;
             
             // Example: Echo the message back
             std::string response = "Server received: " + message;
             handler->sendMessage(response);
+            
+            // Force epoll to monitor write events for this client
+            server.forceWriteEvent(handler->getClientFd());
             
             // Example: Broadcast to all clients (optional)
             // server.broadcastMessage("Broadcast: " + message);

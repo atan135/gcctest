@@ -245,6 +245,11 @@ void NetworkServer::handleClientEvent(int client_fd, uint32_t events) {
         thread_pool_->enqueue([&handler]() {
             handler->handleRead();
             handler->processMessages();
+            
+            // After processing messages, try to send any queued responses
+            if (handler->hasMessagesToSend()) {
+                handler->handleWrite();
+            }
         });
     }
     
@@ -286,6 +291,19 @@ void NetworkServer::sendToClient(int client_fd, const std::string& message) {
     auto it = connections_.find(client_fd);
     if (it != connections_.end() && it->second->isConnected()) {
         it->second->sendMessage(message);
+        forceWriteEvent(client_fd);
+    }
+}
+
+void NetworkServer::forceWriteEvent(int client_fd) {
+    auto it = connections_.find(client_fd);
+    if (it != connections_.end() && it->second->isConnected()) {
+        // Force epoll to monitor write events for this client
+        struct epoll_event event;
+        event.data.fd = client_fd;
+        event.events = EPOLLIN | EPOLLOUT | EPOLLET | EPOLLRDHUP;
+        
+        epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, client_fd, &event);
     }
 }
 

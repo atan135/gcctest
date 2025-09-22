@@ -82,6 +82,7 @@ void ConnectionHandler::handleWrite() {
             if (bytes_sent < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     // Socket buffer full, try again later
+                    std::cout << "Socket buffer full for " << getClientInfo() << ", will retry later" << std::endl;
                     break;
                 } else {
                     std::cerr << "Error sending data to " << getClientInfo() 
@@ -91,13 +92,17 @@ void ConnectionHandler::handleWrite() {
                 }
             } else if (bytes_sent == 0) {
                 // No data sent, try again later
+                std::cout << "No data sent to " << getClientInfo() << ", will retry later" << std::endl;
                 break;
             } else if (buffer->isComplete()) {
                 // Complete message sent
+                std::cout << "Message sent successfully to " << getClientInfo() << " (" << bytes_sent << " bytes)" << std::endl;
                 send_queue_.pop();
                 updateActivity();
+            } else {
+                // Partial send
+                std::cout << "Partial send to " << getClientInfo() << " (" << bytes_sent << " bytes), will retry" << std::endl;
             }
-            // Partial send - buffer will be retried next time
         }
         
     } catch (const std::exception& e) {
@@ -123,6 +128,9 @@ void ConnectionHandler::sendMessage(const std::string& message) {
     temp_buffer_->append(MESSAGE_DELIMITER);
     
     send_queue_.enqueue(temp_buffer_->data(), temp_buffer_->size());
+    
+    // Debug output
+    std::cout << "Queued message for " << getClientInfo() << ": " << message << std::endl;
 }
 
 void ConnectionHandler::sendMessage(const char* data, size_t length) {
