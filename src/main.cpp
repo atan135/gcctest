@@ -6,6 +6,7 @@
 #include <map>
 #include <csignal>
 #include <atomic>
+#include <unistd.h>
 
 // Global variables for signal handling
 std::atomic<bool> g_shutdown_requested(false);
@@ -21,6 +22,9 @@ void signalHandler(int signal) {
             break;
         case SIGTERM:
             signal_name = "SIGTERM";
+            break;
+        case SIGUSR1:
+            signal_name = "SIGUSR1 (Background stop)";
             break;
 #ifdef SIGQUIT
         case SIGQUIT:
@@ -60,7 +64,11 @@ void setupSignalHandlers() {
     std::signal(SIGHUP, signalHandler);   // Hangup signal
 #endif
 
+    // For background processes, also handle SIGUSR1 for graceful shutdown
+    std::signal(SIGUSR1, signalHandler);  // User-defined signal 1
+
     std::cout << "Signal handlers registered for graceful shutdown" << std::endl;
+    std::cout << "For background mode, use 'kill -SIGUSR1 <pid>' to stop server" << std::endl;
 }
 
 // Structure to hold configuration settings
@@ -119,6 +127,10 @@ int main() {
     // Setup signal handlers first
     setupSignalHandlers();
     
+    // Force stdout to be unbuffered for background execution
+    std::cout.setf(std::ios::unitbuf);
+    std::cerr.setf(std::ios::unitbuf);
+    
     // Load configuration from file
     ServerConfig config = readConfig("settings.config");
     
@@ -127,14 +139,18 @@ int main() {
     int max_connections = config.max_connections;
     int thread_count = config.thread_count;
     
+    // Get process ID for background mode reference
+    pid_t pid = getpid();
 
     std::cout << "Starting Network Server..." << std::endl;
+    std::cout << "Process ID: " << pid << std::endl;
     std::cout << "Port: " << port << std::endl;
     std::cout << "Max connections: " << max_connections << std::endl;
     std::cout << "Thread count: " << thread_count << std::endl;
     std::cout << "Configuration loaded from settings.config" << std::endl;
     std::cout << "Edit settings.config to modify server parameters" << std::endl;
-    std::cout << "Press Ctrl+C to stop the server" << std::endl;
+    std::cout << "Press Ctrl+C to stop the server (foreground mode)" << std::endl;
+    std::cout << "Use 'kill -SIGUSR1 " << pid << "' to stop server (background mode)" << std::endl;
     std::cout << "----------------------------------------" << std::endl;
     
     try {
